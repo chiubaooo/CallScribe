@@ -80,7 +80,15 @@ class AudioIngestionRepository(private val context: Context) {
         val existing = dao.getById(jobId) ?: return@withContext
         if (existing.status == JobStatus.COMPLETED) return@withContext
         dao.updateStatus(jobId, JobStatus.QUEUED, errorMessage = null)
-        scheduleWorker(jobId)
+        scheduleWorker(jobId, forceReplace = true)
+    }
+
+    suspend fun resumeStuckPendingJobs() = withContext(Dispatchers.IO) {
+        val pending = dao.getPendingJobs()
+        for (job in pending) {
+            dao.updateStatus(job.id, JobStatus.QUEUED, errorMessage = null)
+            scheduleWorker(job.id, forceReplace = true)
+        }
     }
 
     private suspend fun enqueuePreparedFile(
@@ -117,7 +125,7 @@ class AudioIngestionRepository(private val context: Context) {
         return EnqueueResult.Enqueued(jobId, fileName)
     }
 
-    private fun scheduleWorker(jobId: String) {
+    private fun scheduleWorker(jobId: String, forceReplace: Boolean = false) {
         val networkType = if (prefs.wifiOnlyUpload) NetworkType.UNMETERED else NetworkType.CONNECTED
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(networkType)
@@ -130,7 +138,7 @@ class AudioIngestionRepository(private val context: Context) {
 
         WorkManager.getInstance(context).enqueueUniqueWork(
             "transcribe_$jobId",
-            ExistingWorkPolicy.KEEP,
+            if (forceReplace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
             request
         )
     }

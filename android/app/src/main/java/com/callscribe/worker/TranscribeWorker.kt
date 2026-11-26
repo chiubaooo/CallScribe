@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.icu.text.Transliterator
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -13,6 +14,7 @@ import androidx.work.WorkerParameters
 import com.callscribe.CallScribeApp
 import com.callscribe.MainActivity
 import com.callscribe.data.db.JobStatus
+import com.callscribe.data.security.ChineseVariant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -46,34 +48,56 @@ class TranscribeWorker(
 
         var remoteFileName: String? = null
         try {
-            dao.updateStatus(jobId, JobStatus.UPLOADING)
-            val uploaded = api.uploadAudioFile(
-                apiKey = apiKey,
-                audioFile = audioFile,
-                mimeType = job.mimeType,
-                displayName = job.fileName
-            )
-            remoteFileName = uploaded.name
+            val rawTranscript = convertChineseVariant(
+                text = if (audioFile.length() <= INLINE_AUDIO_LIMIT_BYTES) {
+                    // Fast path (<15MB / ~30 min M4A): inline base64 skips Files API upload & polling
+                    dao.updateStatus(jobId, JobStatus.TRANSCRIBING)
+                    api.transcribeInlineWithDiarization(
+                        apiKey = apiKey,
+                        audioFile = audioFile,
+                        mimeType = job.mimeType
+                    )
+                } else {
+                    dao.updateStatus(jobId, JobStatus.UPLOADING)
+                    val uploaded = api.uploadAudioFile(
+                        apiKey = apiKey,
+                        audioFile = audioFile,
+                        mimeType = job.mimeType,
+                        displayName = job.fileName
+                    )
+                    remoteFileName = uploaded.name
 
-            dao.updateStatus(jobId, JobStatus.TRANSCRIBING)
-            val rawTranscript = api.transcribeWithDiarization(
-                apiKey = apiKey,
-                fileUri = uploaded.uri,
-                mimeType = uploaded.mimeType
+                    dao.updateStatus(jobId, JobStatus.TRANSCRIBING)
+                    api.transcribeWithDiarization(
+                        apiKey = apiKey,
+                        fileUri = uploaded.uri,
+                        mimeType = uploaded.mimeType
+                    )
+                },
+                variant = prefs.chineseVariant
             )
 
-            dao.updateStatus(jobId, JobStatus.SUMMARIZING)
-            val summary = api.summarizeTranscriptZhTw(
-                apiKey = apiKey,
-                rawTranscript = rawTranscript
-            )
-
-            val summaryMd = summary.summaryBullets.joinToString("\n") { "- $it" }
-            val actionMd = summary.actionItems.joinToString("\n") { "- [ ] $it" }
+            val title: String
+            val summaryMd: String
+            val actionMd: String
+            if (prefs.enableAiSummary) {
+                dao.updateStatus(jobId, JobStatus.SUMMARIZING)
+                val summary = api.summarizeTranscriptZhTw(
+                    apiKey = apiKey,
+                    rawTranscript = rawTranscript
+                )
+                title = summary.title
+                summaryMd = summary.summaryBullets.joinToString("\n") { "- $it" }
+                actionMd = summary.actionItems.joinToString("\n") { "- [ ] $it" }
+            } else {
+                title = job.fileName.substringBeforeLast('.')
+                summaryMd = ""
+                actionMd = ""
+            }
 
             val exported = runCatching {
                 app.exporter.exportToDocuments(
-                    title = summary.title,
+                    title = title,
                     createdAt = job.createdAt,
                     sourceFileName = job.fileName,
                     summaryMarkdown = summaryMd,
@@ -85,7 +109,7 @@ class TranscribeWorker(
 
             dao.markCompleted(
                 id = jobId,
-                title = summary.title,
+                title = title,
                 summaryMarkdown = summaryMd,
                 actionItemsMarkdown = actionMd,
                 transcriptText = rawTranscript,
@@ -98,7 +122,7 @@ class TranscribeWorker(
                 audioFile.delete()
             }
 
-            postCompletionNotification(jobId, summary.title, exported?.fileName)
+            postCompletionNotification(jobId, title, exported?.fileName)
             Result.success()
         } catch (e: Exception) {
             val msg = e.localizedMessage ?: "轉錄過程發生未知錯誤"
@@ -150,7 +174,17 @@ class TranscribeWorker(
         NotificationManagerCompat.from(applicationContext).notify(jobId.hashCode(), notification)
     }
 
+    private fun convertChineseVariant(text: String, variant: ChineseVariant): String =
+        runCatching {
+            val rule = when (variant) {
+                ChineseVariant.TRADITIONAL -> "Simplified-Traditional"
+                ChineseVariant.SIMPLIFIED -> "Traditional-Simplified"
+            }
+            Transliterator.getInstance(rule).transliterate(text)
+        }.getOrDefault(text)
+
     companion object {
         const val KEY_JOB_ID = "job_id"
+        private const val INLINE_AUDIO_LIMIT_BYTES = 15L * 1024L * 1024L
     }
 }

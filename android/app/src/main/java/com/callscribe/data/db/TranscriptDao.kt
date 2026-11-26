@@ -51,6 +51,19 @@ class TranscriptDao(context: Context) {
         }
     }
 
+    suspend fun getPendingJobs(): List<TranscriptEntity> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<TranscriptEntity>()
+        helper.readableDatabase.rawQuery(
+            "SELECT * FROM transcripts WHERE status IN ('QUEUED', 'UPLOADING', 'TRANSCRIBING', 'SUMMARIZING')",
+            null
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                list.add(cursor.toEntity())
+            }
+        }
+        list
+    }
+
     suspend fun insert(entity: TranscriptEntity) = withContext(Dispatchers.IO) {
         val values = ContentValues().apply {
             put("id", entity.id)

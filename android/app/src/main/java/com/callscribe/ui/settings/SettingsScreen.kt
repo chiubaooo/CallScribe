@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.callscribe.CallScribeApp
+import com.callscribe.data.security.ChineseVariant
 import com.callscribe.data.security.ExportFormat
 import com.callscribe.worker.FolderScanWorker
 import kotlinx.coroutines.launch
@@ -60,7 +61,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     var showKey by remember { mutableStateOf(false) }
     var watchedFolder by remember { mutableStateOf(prefs.watchedFolderUri) }
     var exportFormat by remember { mutableStateOf(prefs.exportFormat) }
+    var chineseVariant by remember { mutableStateOf(prefs.chineseVariant) }
     var wifiOnly by remember { mutableStateOf(prefs.wifiOnlyUpload) }
+    var enableSummary by remember { mutableStateOf(prefs.enableAiSummary) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -127,6 +130,26 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Text("儲存 API Key")
             }
 
+            Text("轉錄輸出中文（繁體 / 简体）", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FilterChip(
+                    selected = chineseVariant == ChineseVariant.TRADITIONAL,
+                    onClick = {
+                        chineseVariant = ChineseVariant.TRADITIONAL
+                        prefs.chineseVariant = ChineseVariant.TRADITIONAL
+                    },
+                    label = { Text("繁體中文") }
+                )
+                FilterChip(
+                    selected = chineseVariant == ChineseVariant.SIMPLIFIED,
+                    onClick = {
+                        chineseVariant = ChineseVariant.SIMPLIFIED
+                        prefs.chineseVariant = ChineseVariant.SIMPLIFIED
+                    },
+                    label = { Text("简体中文") }
+                )
+            }
+
             Text("匯出文字檔格式（Documents/CallTranscripts/）", style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FilterChip(
@@ -144,6 +167,28 @@ fun SettingsScreen(onBack: () -> Unit) {
                         prefs.exportFormat = ExportFormat.PLAIN_TEXT
                     },
                     label = { Text("純文字 (.txt)") }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("附加 AI 重點摘要與待辦", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "預設關閉以極速直出純 .txt 逐字稿；開啟會多一次摘要請求",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = enableSummary,
+                    onCheckedChange = {
+                        enableSummary = it
+                        prefs.enableAiSummary = it
+                    }
                 )
             }
 

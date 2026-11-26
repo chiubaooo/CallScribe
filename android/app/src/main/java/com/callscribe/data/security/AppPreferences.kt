@@ -10,6 +10,11 @@ enum class ExportFormat(val extension: String, val mimeType: String) {
     PLAIN_TEXT("txt", "text/plain")
 }
 
+enum class ChineseVariant {
+    TRADITIONAL,
+    SIMPLIFIED
+}
+
 class AppPreferences(context: Context) {
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -53,10 +58,27 @@ class AppPreferences(context: Context) {
             normalPrefs.edit().putBoolean(KEY_WIFI_ONLY, value).apply()
         }
 
+    var enableAiSummary: Boolean
+        get() = normalPrefs.getBoolean(KEY_ENABLE_AI_SUMMARY, false)
+        set(value) {
+            normalPrefs.edit().putBoolean(KEY_ENABLE_AI_SUMMARY, value).apply()
+        }
+
+    var chineseVariant: ChineseVariant
+        get() {
+            val saved = normalPrefs.getString(KEY_CHINESE_VARIANT, ChineseVariant.TRADITIONAL.name)
+            return ChineseVariant.entries.firstOrNull { it.name == saved } ?: ChineseVariant.TRADITIONAL
+        }
+        set(value) {
+            normalPrefs.edit().putString(KEY_CHINESE_VARIANT, value.name).apply()
+        }
+
     companion object {
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_WATCHED_FOLDER_URI = "watched_folder_uri"
         private const val KEY_EXPORT_FORMAT = "export_format"
         private const val KEY_WIFI_ONLY = "wifi_only_upload"
+        private const val KEY_ENABLE_AI_SUMMARY = "enable_ai_summary"
+        private const val KEY_CHINESE_VARIANT = "chinese_variant"
     }
 }

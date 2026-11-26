@@ -43,18 +43,26 @@ class TranscriptExporter(private val context: Context) {
             }
 
             ExportFormat.PLAIN_TEXT -> buildString {
-                appendLine("標題：$title")
-                appendLine("時間：$timestamp")
-                appendLine("來源：$sourceFileName")
-                appendLine("=".repeat(36))
-                appendLine("[重點摘要]")
-                appendLine(summaryMarkdown.ifBlank { "（無摘要）" })
-                appendLine()
-                appendLine("[待辦事項]")
-                appendLine(actionItemsMarkdown.ifBlank { "無明確待辦事項" })
-                appendLine()
-                appendLine("[逐字稿]")
-                appendLine(transcriptText)
+                if (summaryMarkdown.isBlank() && actionItemsMarkdown.isBlank()) {
+                    appendLine(transcriptText)
+                } else {
+                    appendLine("標題：$title")
+                    appendLine("時間：$timestamp")
+                    appendLine("來源：$sourceFileName")
+                    appendLine("=".repeat(36))
+                    if (summaryMarkdown.isNotBlank()) {
+                        appendLine("[重點摘要]")
+                        appendLine(summaryMarkdown)
+                        appendLine()
+                    }
+                    if (actionItemsMarkdown.isNotBlank()) {
+                        appendLine("[待辦事項]")
+                        appendLine(actionItemsMarkdown)
+                        appendLine()
+                    }
+                    appendLine("[逐字稿]")
+                    appendLine(transcriptText)
+                }
             }
         }
     }

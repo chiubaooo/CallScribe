@@ -1,5 +1,6 @@
 package com.callscribe.data.api
 
+import android.util.Base64
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -138,6 +139,38 @@ class GeminiApiClient {
         throw IOException("Timed out waiting for uploaded audio to become ACTIVE")
     }
 
+    fun transcribeInlineWithDiarization(
+        apiKey: String,
+        audioFile: File,
+        mimeType: String
+    ): String {
+        val base64Audio = Base64.encodeToString(audioFile.readBytes(), Base64.NO_WRAP)
+        val body = buildJsonObject {
+            put("model", "gemini-3.5-transcribe")
+            put("input", buildJsonArray {
+                add(buildJsonObject {
+                    put("type", "audio")
+                    put("data", base64Audio)
+                    put("mime_type", mimeType)
+                })
+            })
+            put("generation_config", buildJsonObject {
+                put("transcription_config", buildJsonObject {
+                    put("language_codes", buildJsonArray {
+                        add(kotlinx.serialization.json.JsonPrimitive("zh-TW"))
+                        add(kotlinx.serialization.json.JsonPrimitive("en-US"))
+                    })
+                    put("mode", buildJsonObject {
+                        put("type", "verbatim")
+                        put("diarization_mode", "speaker")
+                    })
+                })
+            })
+        }.toString()
+
+        return callInteractionsApi(apiKey, body)
+    }
+
     fun transcribeWithDiarization(apiKey: String, fileUri: String, mimeType: String): String {
         val body = buildJsonObject {
             put("model", "gemini-3.5-transcribe")
@@ -150,6 +183,10 @@ class GeminiApiClient {
             })
             put("generation_config", buildJsonObject {
                 put("transcription_config", buildJsonObject {
+                    put("language_codes", buildJsonArray {
+                        add(kotlinx.serialization.json.JsonPrimitive("zh-TW"))
+                        add(kotlinx.serialization.json.JsonPrimitive("en-US"))
+                    })
                     put("mode", buildJsonObject {
                         put("type", "verbatim")
                         put("diarization_mode", "speaker")
@@ -175,6 +212,9 @@ class GeminiApiClient {
         val body = buildJsonObject {
             put("model", "gemini-3.6-flash")
             put("input", prompt)
+            put("generation_config", buildJsonObject {
+                put("thinking_level", "minimal")
+            })
             put("response_format", buildJsonObject {
                 put("type", "text")
                 put("mime_type", "application/json")

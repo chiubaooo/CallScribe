@@ -39,6 +39,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _snackbarMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val snackbarMessage = _snackbarMessage.asSharedFlow()
 
+    init {
+        viewModelScope.launch {
+            repo.resumeStuckPendingJobs()
+        }
+    }
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }
