@@ -73,6 +73,19 @@ class AudioRecordService : Service() {
             // Lock recording to built-in phone mic without requesting AudioFocus or Bluetooth SCO,
             // so Bluetooth A2DP music playback stays hi-res stereo and never degrades to HFP mono.
             val audioManager = getSystemService(AudioManager::class.java)
+            if (audioManager?.mode == AudioManager.MODE_IN_CALL ||
+                audioManager?.mode == AudioManager.MODE_IN_COMMUNICATION
+            ) {
+                mediaRecorder.release()
+                file.delete()
+                _state.value = RecordingState(
+                    isRecording = false,
+                    lastError = "偵測到通話中：Android 會強制靜音第三方錄音，請改用系統通話錄音後「分享 → CallScribe」"
+                )
+                stopSelf()
+                return
+            }
+
             val builtInMic = audioManager
                 ?.getDevices(AudioManager.GET_DEVICES_INPUTS)
                 ?.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }

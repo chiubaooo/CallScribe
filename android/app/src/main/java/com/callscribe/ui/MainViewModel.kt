@@ -75,6 +75,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleStar(id: String, currentStarred: Boolean) {
+        viewModelScope.launch {
+            dao.setStarred(id, !currentStarred)
+        }
+    }
+
     fun deleteTranscript(id: String) {
         viewModelScope.launch {
             dao.deleteById(id)

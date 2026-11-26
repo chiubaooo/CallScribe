@@ -79,6 +79,7 @@ class TranscriptDao(context: Context) {
             put("transcriptText", entity.transcriptText)
             put("exportedUri", entity.exportedUri)
             put("exportedFileName", entity.exportedFileName)
+            put("isStarred", if (entity.isStarred) 1 else 0)
             put("createdAt", entity.createdAt)
             put("updatedAt", entity.updatedAt)
         }
@@ -137,6 +138,15 @@ class TranscriptDao(context: Context) {
         refreshFlow()
     }
 
+    suspend fun setStarred(id: String, starred: Boolean) = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("isStarred", if (starred) 1 else 0)
+            put("updatedAt", System.currentTimeMillis())
+        }
+        helper.writableDatabase.update("transcripts", values, "id = ?", arrayOf(id))
+        refreshFlow()
+    }
+
     suspend fun deleteById(id: String) = withContext(Dispatchers.IO) {
         helper.writableDatabase.delete("transcripts", "id = ?", arrayOf(id))
         refreshFlow()
@@ -149,7 +159,7 @@ class TranscriptDao(context: Context) {
     private fun queryAllSync(): List<TranscriptEntity> {
         val list = mutableListOf<TranscriptEntity>()
         helper.readableDatabase.rawQuery(
-            "SELECT * FROM transcripts ORDER BY createdAt DESC",
+            "SELECT * FROM transcripts ORDER BY isStarred DESC, createdAt DESC",
             null
         ).use { cursor ->
             while (cursor.moveToNext()) {
@@ -173,6 +183,7 @@ class TranscriptDao(context: Context) {
         transcriptText = getStringOrNull("transcriptText"),
         exportedUri = getStringOrNull("exportedUri"),
         exportedFileName = getStringOrNull("exportedFileName"),
+        isStarred = getInt(getColumnIndexOrThrow("isStarred")) == 1,
         createdAt = getLong(getColumnIndexOrThrow("createdAt")),
         updatedAt = getLong(getColumnIndexOrThrow("updatedAt"))
     )
@@ -184,7 +195,7 @@ class TranscriptDao(context: Context) {
 }
 
 private class CallScribeSqliteHelper(context: Context) :
-    SQLiteOpenHelper(context, "callscribe.db", null, 1) {
+    SQLiteOpenHelper(context, "callscribe.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -203,6 +214,7 @@ private class CallScribeSqliteHelper(context: Context) :
                 transcriptText TEXT,
                 exportedUri TEXT,
                 exportedFileName TEXT,
+                isStarred INTEGER NOT NULL DEFAULT 0,
                 createdAt INTEGER NOT NULL,
                 updatedAt INTEGER NOT NULL
             )
@@ -210,5 +222,9 @@ private class CallScribeSqliteHelper(context: Context) :
         )
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE transcripts ADD COLUMN isStarred INTEGER NOT NULL DEFAULT 0")
+        }
+    }
 }

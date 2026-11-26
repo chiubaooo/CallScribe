@@ -1,9 +1,13 @@
 package com.callscribe.ui.home
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,21 +23,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,22 +52,31 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.callscribe.CallScribeApp
 import com.callscribe.data.db.JobStatus
 import com.callscribe.data.db.TranscriptEntity
+import com.callscribe.data.security.ChineseVariant
 import com.callscribe.service.AudioRecordService
 import com.callscribe.ui.MainViewModel
 import java.text.SimpleDateFormat
@@ -72,14 +91,24 @@ fun HomeScreen(
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
+    val prefs = remember { (context.applicationContext as CallScribeApp).preferences }
     val transcripts by viewModel.transcripts.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
     val recordingState by AudioRecordService.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var enableSummary by remember { mutableStateOf(prefs.enableAiSummary) }
+    var chineseVariant by remember { mutableStateOf(prefs.chineseVariant) }
 
     LaunchedEffect(Unit) {
         viewModel.snackbarMessage.collect { msg ->
             snackbarHostState.showSnackbar(msg)
+        }
+    }
+
+    LaunchedEffect(recordingState.lastError) {
+        val err = recordingState.lastError
+        if (!err.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(err)
         }
     }
 
@@ -102,8 +131,20 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("CallScribe 通話轉錄") },
+                title = { Text("CallScribe") },
                 actions = {
+                    FilledTonalButton(
+                        onClick = { openSystemRecorder(context) },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.GraphicEq,
+                            contentDescription = "系統錄音",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("系統錄音", style = MaterialTheme.typography.labelMedium)
+                    }
                     if (viewModel.hasWatchedFolder()) {
                         IconButton(onClick = { viewModel.triggerFolderScan() }) {
                             Icon(Icons.Default.FolderOpen, contentDescription = "掃描資料夾")
@@ -223,7 +264,52 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("重點摘要", style = MaterialTheme.typography.labelLarge)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Switch(
+                            checked = enableSummary,
+                            onCheckedChange = {
+                                enableSummary = it
+                                prefs.enableAiSummary = it
+                            }
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (chineseVariant == ChineseVariant.TRADITIONAL) "繁體" else "简体",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Switch(
+                            checked = chineseVariant == ChineseVariant.TRADITIONAL,
+                            onCheckedChange = { isTrad ->
+                                val next = if (isTrad) ChineseVariant.TRADITIONAL else ChineseVariant.SIMPLIFIED
+                                chineseVariant = next
+                                prefs.chineseVariant = next
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             if (transcripts.isEmpty()) {
                 Box(
@@ -252,10 +338,43 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(transcripts, key = { it.id }) { item ->
-                        TranscriptCard(
-                            item = item,
-                            onClick = { onOpenDetail(item.id) },
-                            onRetry = { viewModel.retryJob(item.id) }
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { value ->
+                                if (value == SwipeToDismissBoxValue.EndToStart) {
+                                    viewModel.deleteTranscript(item.id)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                        )
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = false,
+                            backgroundContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.errorContainer)
+                                        .padding(horizontal = 20.dp),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "刪除",
+                                        tint = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            },
+                            content = {
+                                TranscriptCard(
+                                    item = item,
+                                    onClick = { onOpenDetail(item.id) },
+                                    onRetry = { viewModel.retryJob(item.id) },
+                                    onToggleStar = { viewModel.toggleStar(item.id, item.isStarred) }
+                                )
+                            }
                         )
                     }
                 }
@@ -268,7 +387,8 @@ fun HomeScreen(
 private fun TranscriptCard(
     item: TranscriptEntity,
     onClick: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onToggleStar: () -> Unit
 ) {
     val dateStr = remember(item.createdAt) {
         SimpleDateFormat("MM/dd HH:mm", Locale.TAIWAN).format(Date(item.createdAt))
@@ -292,12 +412,27 @@ private fun TranscriptCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = dateStr,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                IconButton(
+                    onClick = onToggleStar,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = if (item.isStarred) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                        contentDescription = if (item.isStarred) "取消星號" else "標記星號",
+                        tint = if (item.isStarred) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -367,4 +502,26 @@ private fun formatDuration(seconds: Long): String {
     val min = seconds / 60
     val sec = seconds % 60
     return "%02d:%02d".format(min, sec)
+}
+
+private fun openSystemRecorder(context: Context) {
+    val pm = context.packageManager
+    val candidates = listOf(
+        "com.google.android.apps.recorder",        // Google Pixel Recorder
+        "com.sec.android.app.voicenote",           // Samsung Voice Recorder
+        "com.android.soundrecorder"                // Xiaomi / AOSP Recorder
+    )
+    for (pkg in candidates) {
+        val launch = pm.getLaunchIntentForPackage(pkg)
+        if (launch != null) {
+            context.startActivity(launch)
+            return
+        }
+    }
+    val genericRecorder = Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION)
+    if (genericRecorder.resolveActivity(pm) != null) {
+        context.startActivity(genericRecorder)
+        return
+    }
+    context.startActivity(Intent(Intent.ACTION_DIAL))
 }

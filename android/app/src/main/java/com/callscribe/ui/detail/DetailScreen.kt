@@ -147,18 +147,22 @@ fun DetailScreen(
                     )
                 }
 
-                SectionCard(
-                    heading = "重點摘要",
-                    body = current.summaryMarkdown.orEmpty().ifBlank { "（無摘要）" }
-                )
+                if (!current.summaryMarkdown.isNullOrBlank()) {
+                    SectionCard(
+                        heading = "重點摘要",
+                        body = current.summaryMarkdown
+                    )
+                }
+
+                if (!current.actionItemsMarkdown.isNullOrBlank()) {
+                    SectionCard(
+                        heading = "待辦事項",
+                        body = current.actionItemsMarkdown
+                    )
+                }
 
                 SectionCard(
-                    heading = "待辦事項",
-                    body = current.actionItemsMarkdown.orEmpty().ifBlank { "- [ ] 無明確待辦事項" }
-                )
-
-                SectionCard(
-                    heading = "完整逐字稿（講者區分）",
+                    heading = "完整逐字稿",
                     body = current.transcriptText.orEmpty().ifBlank { "（無內容）" }
                 )
             }

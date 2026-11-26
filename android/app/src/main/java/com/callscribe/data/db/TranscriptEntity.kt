@@ -23,6 +23,7 @@ data class TranscriptEntity(
     val transcriptText: String? = null,
     val exportedUri: String? = null,
     val exportedFileName: String? = null,
+    val isStarred: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

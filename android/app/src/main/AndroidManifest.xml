@@ -9,6 +9,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <queries>
+        <package android:name="com.google.android.apps.recorder" />
+        <package android:name="com.sec.android.app.voicenote" />
+        <package android:name="com.android.soundrecorder" />
+        <intent>
+            <action android:name="android.provider.MediaStore.RECORD_SOUND" />
+        </intent>
+    </queries>
+
     <application
         android:name=".CallScribeApp"
         android:allowBackup="false"
