@@ -1,0 +1,21 @@
+# Local & IDE
+local.properties
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Gradle & Android Build
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Secrets
+*.keystore
+*.jks
+.env
+.env.local
